@@ -1,1 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Spanish Conjugation Helper</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body{
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  background: linear-gradient(180deg,#f7f9ff,#eef2ff);
+  margin:0;
+  padding:0;
+  color:#0f172a;
+}
+.container{
+  max-width:820px;
+  margin:60px auto;
+  padding:24px;
+  background: rgba(255,255,255,.5);
+  backdrop-filter: blur(18px);
+  border-radius:22px;
+  box-shadow:0 20px 50px rgba(0,0,0,.08);
+  border:1px solid rgba(15,23,42,.08);
+}
+h1{margin-top:0;font-size:22px}
+p{color:#475569;font-size:14px}
+textarea{
+  width:100%;
+  min-height:90px;
+  padding:14px;
+  font-size:16px;
+  border-radius:14px;
+  border:1px solid rgba(15,23,42,.15);
+  background:rgba(255,255,255,.7);
+}
+button{
+  margin-top:14px;
+  padding:12px 20px;
+  border-radius:14px;
+  border:none;
+  font-size:15px;
+  cursor:pointer;
+  background:linear-gradient(135deg,#6366f1,#3b82f6);
+  color:white;
+}
+.result{
+  margin-top:22px;
+  padding:18px;
+  border-radius:16px;
+  background:rgba(255,255,255,.6);
+  border:1px solid rgba(15,23,42,.1);
+  font-size:20px;
+  font-weight:700;
+}
+.error{color:#b91c1c}
+</style>
+</head>
+
+<body>
+<div class="container">
+  <h1>Spanish Conjugation Helper</h1>
+  <p>Paste something like:<br><strong>imperfect yo to know (someone)</strong></p>
+
+  <textarea id="input"></textarea>
+  <button onclick="run()">Get Answer</button>
+
+  <div id="output" class="result"></div>
+</div>
+
+<script>
+/* ---------------- VERB DATABASE ---------------- */
+
+const verbs = {
+
+  /* REFLEXIVE */
+  "to become bored": {
+    present:{yo:"me aburro",tú:"te aburres",él:"se aburre",nosotros:"nos aburrimos",vosotros:"os aburrís",ustedes:"se aburren"},
+    preterite:{yo:"me aburrí",tú:"te aburriste",él:"se aburrió",nosotros:"nos aburrimos",vosotros:"os aburristeis",ustedes:"se aburrieron"},
+    imperfect:{yo:"me aburría",tú:"te aburrías",él:"se aburría",nosotros:"nos aburríamos",vosotros:"os aburríais",ustedes:"se aburrían"}
+  },
+  "to get scared":{
+    present:{yo:"me asusto",tú:"te asustas",él:"se asusta",nosotros:"nos asustamos",vosotros:"os asustáis",ustedes:"se asustan"},
+    preterite:{yo:"me asusté",tú:"te asustaste",él:"se asustó",nosotros:"nos asustamos",vosotros:"os asustasteis",ustedes:"se asustaron"},
+    imperfect:{yo:"me asustaba",tú:"te asustabas",él:"se asustaba",nosotros:"nos asustábamos",vosotros:"os asustabais",ustedes:"se asustaban"}
+  },
+  "to get tired":{
+    present:{yo:"me canso",tú:"te cansas",él:"se cansa",nosotros:"nos cansamos",vosotros:"os cansáis",ustedes:"se cansan"},
+    preterite:{yo:"me cansé",tú:"te cansaste",él:"se cansó",nosotros:"nos cansamos",vosotros:"os cansasteis",ustedes:"se cansaron"},
+    imperfect:{yo:"me cansaba",tú:"te cansabas",él:"se cansaba",nosotros:"nos cansábamos",vosotros:"os cansabais",ustedes:"se cansaban"}
+  },
+  "to get angry":{
+    present:{yo:"me enojo",tú:"te enojas",él:"se enoja",nosotros:"nos enojamos",vosotros:"os enojáis",ustedes:"se enojan"},
+    preterite:{yo:"me enojé",tú:"te enojaste",él:"se enojó",nosotros:"nos enojamos",vosotros:"os enojasteis",ustedes:"se enojaron"},
+    imperfect:{yo:"me enojaba",tú:"te enojabas",él:"se enojaba",nosotros:"nos enojábamos",vosotros:"os enojabais",ustedes:"se enojaban"}
+  },
+  "to get lost; to miss out on":{
+    present:{yo:"me pierdo",tú:"te pierdes",él:"se pierde",nosotros:"nos perdemos",vosotros:"os perdéis",ustedes:"se pierden"},
+    preterite:{yo:"me perdí",tú:"te perdiste",él:"se perdió",nosotros:"nos perdimos",vosotros:"os perdisteis",ustedes:"se perdieron"},
+    imperfect:{yo:"me perdía",tú:"te perdías",él:"se perdía",nosotros:"nos perdíamos",vosotros:"os perdíais",ustedes:"se perdían"}
+  },
+
+  /* CORE VERBS */
+  "to know (someone)": {
+    present:{yo:"conozco",tú:"conoces",él:"conoce",nosotros:"conocemos",vosotros:"conocéis",ustedes:"conocen"},
+    preterite:{yo:"conocí",tú:"conociste",él:"conoció",nosotros:"conocimos",vosotros:"conocisteis",ustedes:"conocieron"},
+    imperfect:{yo:"conocía",tú:"conocías",él:"conocía",nosotros:"conocíamos",vosotros:"conocíais",ustedes:"conocían"}
+  },
+  "to believe":{
+    present:{yo:"creo",tú:"crees",él:"cree",nosotros:"creemos",vosotros:"creéis",ustedes:"creen"},
+    preterite:{yo:"creí",tú:"creíste",él:"creyó",nosotros:"creímos",vosotros:"creísteis",ustedes:"creyeron"},
+    imperfect:{yo:"creía",tú:"creías",él:"creía",nosotros:"creíamos",vosotros:"creíais",ustedes:"creían"}
+  },
+  "to go":{
+    present:{yo:"voy",tú:"vas",él:"va",nosotros:"vamos",vosotros:"vais",ustedes:"van"},
+    preterite:{yo:"fui",tú:"fuiste",él:"fue",nosotros:"fuimos",vosotros:"fuisteis",ustedes:"fueron"},
+    imperfect:{yo:"iba",tú:"ibas",él:"iba",nosotros:"íbamos",vosotros:"ibais",ustedes:"iban"}
+  },
+  "to do/to make":{
+    present:{yo:"hago",tú:"haces",él:"hace",nosotros:"hacemos",vosotros:"hacéis",ustedes:"hacen"},
+    preterite:{yo:"hice",tú:"hiciste",él:"hizo",nosotros:"hicimos",vosotros:"hicisteis",ustedes:"hicieron"},
+    imperfect:{yo:"hacía",tú:"hacías",él:"hacía",nosotros:"hacíamos",vosotros:"hacíais",ustedes:"hacían"}
+  },
+  "to say":{
+    present:{yo:"digo",tú:"dices",él:"dice",nosotros:"decimos",vosotros:"decís",ustedes:"dicen"},
+    preterite:{yo:"dije",tú:"dijiste",él:"dijo",nosotros:"dijimos",vosotros:"dijisteis",ustedes:"dijeron"},
+    imperfect:{yo:"decía",tú:"decías",él:"decía",nosotros:"decíamos",vosotros:"decíais",ustedes:"decían"}
+  }
+};
+
+/* ---------------- PARSER ---------------- */
+
+function run(){
+  const text = document.getElementById("input").value.toLowerCase();
+  const out = document.getElementById("output");
+
+  const tense =
+    text.includes("preterite") ? "preterite" :
+    text.includes("imperfect") ? "imperfect" :
+    text.includes("present") ? "present" : null;
+
+  const subject =
+    ["yo","tú","él","ella","nosotros","vosotros","ustedes"]
+    .find(s => text.includes(s));
+
+  const verbKey = Object.keys(verbs).find(v => text.includes(v));
+
+  if(!tense || !subject || !verbKey){
+    out.innerHTML = `<span class="error">Could not parse input.</span>`;
+    return;
+  }
+
+  const subj = subject === "ella" ? "él" : subject;
+  out.textContent = verbs[verbKey][tense][subj];
+}
+</script>
+</body>
+</html>
 
