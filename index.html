@@ -14,7 +14,7 @@ body{
   color:#0f172a;
 }
 .container{
-  max-width:880px;
+  max-width:900px;
   margin:60px auto;
   padding:28px;
   background: rgba(255,255,255,.55);
@@ -60,7 +60,7 @@ button{
 <body>
 <div class="container">
   <h1>Spanish Conjugation Helper</h1>
-  <p>Paste prompts like:<br><strong>imperfect yo to know (someone)</strong></p>
+  <p>Paste prompts like:<br><strong>present ustedes to know (how to)</strong></p>
 
   <textarea id="input"></textarea>
   <button onclick="run()">Get Answer</button>
@@ -70,101 +70,78 @@ button{
 
 <script>
 /* =====================================================
-   HARD-CODED VERB DATABASE (OPTION A)
+   ENGLISH DEFINITION ALIASES (MATCH YOUR DOCUMENT)
+   ===================================================== */
+
+const aliases = {
+  "to know (someone)": "to know (someone)",
+  "to know someone": "to know (someone)",
+
+  "to know (how to)": "to know (how to)",
+  "to know how": "to know (how to)",
+
+  "to take out": "to take out",
+  "to take": "to take",
+
+  "to get bored": "to become bored",
+  "to become bored": "to become bored",
+
+  "to get angry": "to get angry",
+  "to become angry": "to get angry",
+
+  "to get wet": "to get wet",
+
+  "to get lost": "to get lost; to miss out on",
+  "to miss out on": "to get lost; to miss out on"
+};
+
+/* =====================================================
+   HARD-CODED VERBS
    ===================================================== */
 
 const verbs = {
 
-  /* ---------- REFLEXIVE VERBS ---------- */
-
-  "to become bored":{
-    present:{yo:"me aburro",tú:"te aburres",él:"se aburre",nosotros:"nos aburrimos",vosotros:"os aburrís",ustedes:"se aburren"},
-    preterite:{yo:"me aburrí",tú:"te aburriste",él:"se aburrió",nosotros:"nos aburrimos",vosotros:"os aburristeis",ustedes:"se aburrieron"},
-    imperfect:{yo:"me aburría",tú:"te aburrías",él:"se aburría",nosotros:"nos aburríamos",vosotros:"os aburríais",ustedes:"se aburrían"}
-  },
-
-  "to get scared":{
-    present:{yo:"me asusto",tú:"te asustas",él:"se asusta",nosotros:"nos asustamos",vosotros:"os asustáis",ustedes:"se asustan"},
-    preterite:{yo:"me asusté",tú:"te asustaste",él:"se asustó",nosotros:"nos asustamos",vosotros:"os asustasteis",ustedes:"se asustaron"},
-    imperfect:{yo:"me asustaba",tú:"te asustabas",él:"se asustaba",nosotros:"nos asustábamos",vosotros:"os asustabais",ustedes:"se asustaban"}
-  },
-
-  "to get angry":{
-    present:{yo:"me enojo",tú:"te enojas",él:"se enoja",nosotros:"nos enojamos",vosotros:"os enojáis",ustedes:"se enojan"},
-    preterite:{yo:"me enojé",tú:"te enojaste",él:"se enojó",nosotros:"nos enojamos",vosotros:"os enojasteis",ustedes:"se enojaron"},
-    imperfect:{yo:"me enojaba",tú:"te enojabas",él:"se enojaba",nosotros:"nos enojábamos",vosotros:"os enojabais",ustedes:"se enojaban"}
-  },
-
-  "to get wet":{
-    present:{yo:"me mojo",tú:"te mojas",él:"se moja",nosotros:"nos mojamos",vosotros:"os mojáis",ustedes:"se mojan"},
-    preterite:{yo:"me mojé",tú:"te mojaste",él:"se mojó",nosotros:"nos mojamos",vosotros:"os mojasteis",ustedes:"se mojaron"},
-    imperfect:{yo:"me mojaba",tú:"te mojabas",él:"se mojaba",nosotros:"nos mojábamos",vosotros:"os mojabais",ustedes:"se mojaban"}
-  },
-
-  "to get lost; to miss out on":{
-    present:{yo:"me pierdo",tú:"te pierdes",él:"se pierde",nosotros:"nos perdemos",vosotros:"os perdéis",ustedes:"se pierden"},
-    preterite:{yo:"me perdí",tú:"te perdiste",él:"se perdió",nosotros:"nos perdimos",vosotros:"os perdisteis",ustedes:"se perdieron"},
-    imperfect:{yo:"me perdía",tú:"te perdías",él:"se perdía",nosotros:"nos perdíamos",vosotros:"os perdíais",ustedes:"se perdían"}
-  },
-
-  /* ---------- CORE IRREGULARS ---------- */
-
-  "to go":{
-    present:{yo:"voy",tú:"vas",él:"va",nosotros:"vamos",vosotros:"vais",ustedes:"van"},
-    preterite:{yo:"fui",tú:"fuiste",él:"fue",nosotros:"fuimos",vosotros:"fuisteis",ustedes:"fueron"},
-    imperfect:{yo:"iba",tú:"ibas",él:"iba",nosotros:"íbamos",vosotros:"ibais",ustedes:"iban"}
-  },
-
-  "to be":{
-    present:{yo:"soy",tú:"eres",él:"es",nosotros:"somos",vosotros:"sois",ustedes:"son"},
-    preterite:{yo:"fui",tú:"fuiste",él:"fue",nosotros:"fuimos",vosotros:"fuisteis",ustedes:"fueron"},
-    imperfect:{yo:"era",tú:"eras",él:"era",nosotros:"éramos",vosotros:"erais",ustedes:"eran"}
-  },
-
-  "to have":{
-    present:{yo:"tengo",tú:"tienes",él:"tiene",nosotros:"tenemos",vosotros:"tenéis",ustedes:"tienen"},
-    preterite:{yo:"tuve",tú:"tuviste",él:"tuvo",nosotros:"tuvimos",vosotros:"tuvisteis",ustedes:"tuvieron"},
-    imperfect:{yo:"tenía",tú:"tenías",él:"tenía",nosotros:"teníamos",vosotros:"teníais",ustedes:"tenían"}
-  },
-
-  "to do/to make":{
-    present:{yo:"hago",tú:"haces",él:"hace",nosotros:"hacemos",vosotros:"hacéis",ustedes:"hacen"},
-    preterite:{yo:"hice",tú:"hiciste",él:"hizo",nosotros:"hicimos",vosotros:"hicisteis",ustedes:"hicieron"},
-    imperfect:{yo:"hacía",tú:"hacías",él:"hacía",nosotros:"hacíamos",vosotros:"hacíais",ustedes:"hacían"}
-  },
-
-  "to say":{
-    present:{yo:"digo",tú:"dices",él:"dice",nosotros:"decimos",vosotros:"decís",ustedes:"dicen"},
-    preterite:{yo:"dije",tú:"dijiste",él:"dijo",nosotros:"dijimos",vosotros:"dijisteis",ustedes:"dijeron"},
-    imperfect:{yo:"decía",tú:"decías",él:"decía",nosotros:"decíamos",vosotros:"decíais",ustedes:"decían"}
-  },
-
-  "to know (someone)":{
+  "to know (someone)": {
     present:{yo:"conozco",tú:"conoces",él:"conoce",nosotros:"conocemos",vosotros:"conocéis",ustedes:"conocen"},
     preterite:{yo:"conocí",tú:"conociste",él:"conoció",nosotros:"conocimos",vosotros:"conocisteis",ustedes:"conocieron"},
     imperfect:{yo:"conocía",tú:"conocías",él:"conocía",nosotros:"conocíamos",vosotros:"conocíais",ustedes:"conocían"}
   },
 
-  "to believe":{
-    present:{yo:"creo",tú:"crees",él:"cree",nosotros:"creemos",vosotros:"creéis",ustedes:"creen"},
-    preterite:{yo:"creí",tú:"creíste",él:"creyó",nosotros:"creímos",vosotros:"creísteis",ustedes:"creyeron"},
-    imperfect:{yo:"creía",tú:"creías",él:"creía",nosotros:"creíamos",vosotros:"creíais",ustedes:"creían"}
+  "to know (how to)": {
+    present:{yo:"sé",tú:"sabes",él:"sabe",nosotros:"sabemos",vosotros:"sabéis",ustedes:"saben"},
+    preterite:{yo:"supe",tú:"supiste",él:"supo",nosotros:"supimos",vosotros:"supisteis",ustedes:"supieron"},
+    imperfect:{yo:"sabía",tú:"sabías",él:"sabía",nosotros:"sabíamos",vosotros:"sabíais",ustedes:"sabían"}
   },
 
-  /* ---------- REGULAR -AR / -ER / -IR ---------- */
-
-  "to speak":{
-    present:{yo:"hablo",tú:"hablas",él:"habla",nosotros:"hablamos",vosotros:"habláis",ustedes:"hablan"},
-    preterite:{yo:"hablé",tú:"hablaste",él:"habló",nosotros:"hablamos",vosotros:"hablasteis",ustedes:"hablaron"},
-    imperfect:{yo:"hablaba",tú:"hablabas",él:"hablaba",nosotros:"hablábamos",vosotros:"hablabais",ustedes:"hablaban"}
+  "to take out": {
+    present:{yo:"saco",tú:"sacas",él:"saca",nosotros:"sacamos",vosotros:"sacáis",ustedes:"sacan"},
+    preterite:{yo:"saqué",tú:"sacaste",él:"sacó",nosotros:"sacamos",vosotros:"sacasteis",ustedes:"sacaron"},
+    imperfect:{yo:"sacaba",tú:"sacabas",él:"sacaba",nosotros:"sacábamos",vosotros:"sacabais",ustedes:"sacaban"}
   },
 
-  "to live":{
-    present:{yo:"vivo",tú:"vives",él:"vive",nosotros:"vivimos",vosotros:"vivís",ustedes:"viven"},
-    preterite:{yo:"viví",tú:"viviste",él:"vivió",nosotros:"vivimos",vosotros:"vivisteis",ustedes:"vivieron"},
-    imperfect:{yo:"vivía",tú:"vivías",él:"vivía",nosotros:"vivíamos",vosotros:"vivíais",ustedes:"vivían"}
+  "to become bored": {
+    present:{yo:"me aburro",tú:"te aburres",él:"se aburre",nosotros:"nos aburrimos",vosotros:"os aburrís",ustedes:"se aburren"},
+    preterite:{yo:"me aburrí",tú:"te aburriste",él:"se aburrió",nosotros:"nos aburrimos",vosotros:"os aburristeis",ustedes:"se aburrieron"},
+    imperfect:{yo:"me aburría",tú:"te aburrías",él:"se aburría",nosotros:"nos aburríamos",vosotros:"os aburríais",ustedes:"se aburrían"}
+  },
+
+  "to get angry": {
+    present:{yo:"me enojo",tú:"te enojas",él:"se enoja",nosotros:"nos enojamos",vosotros:"os enojáis",ustedes:"se enojan"},
+    preterite:{yo:"me enojé",tú:"te enojaste",él:"se enojó",nosotros:"nos enojamos",vosotros:"os enojasteis",ustedes:"se enojaron"},
+    imperfect:{yo:"me enojaba",tú:"te enojabas",él:"se enojaba",nosotros:"nos enojábamos",vosotros:"os enojabais",ustedes:"se enojaban"}
+  },
+
+  "to get wet": {
+    present:{yo:"me mojo",tú:"te mojas",él:"se moja",nosotros:"nos mojamos",vosotros:"os mojáis",ustedes:"se mojan"},
+    preterite:{yo:"me mojé",tú:"te mojaste",él:"se mojó",nosotros:"nos mojamos",vosotros:"os mojasteis",ustedes:"se mojaron"},
+    imperfect:{yo:"me mojaba",tú:"te mojabas",él:"se mojaba",nosotros:"nos mojábamos",vosotros:"os mojabais",ustedes:"se mojaban"}
+  },
+
+  "to get lost; to miss out on": {
+    present:{yo:"me pierdo",tú:"te pierdes",él:"se pierde",nosotros:"nos perdemos",vosotros:"os perdéis",ustedes:"se pierden"},
+    preterite:{yo:"me perdí",tú:"te perdiste",él:"se perdió",nosotros:"nos perdimos",vosotros:"os perdisteis",ustedes:"se perdieron"},
+    imperfect:{yo:"me perdía",tú:"te perdías",él:"se perdía",nosotros:"nos perdíamos",vosotros:"os perdíais",ustedes:"se perdían"}
   }
-
 };
 
 /* =====================================================
@@ -184,9 +161,10 @@ function run(){
     ["yo","tú","él","ella","nosotros","vosotros","ustedes"]
       .find(s => text.includes(s));
 
-  const verbKey = Object.keys(verbs).find(v => text.includes(v));
+  const aliasKey = Object.keys(aliases).find(a => text.includes(a));
+  const verbKey = aliasKey ? aliases[aliasKey] : null;
 
-  if(!tense || !subject || !verbKey){
+  if(!tense || !subject || !verbKey || !verbs[verbKey]){
     out.innerHTML = `<span class="error">Could not parse input.</span>`;
     return;
   }
