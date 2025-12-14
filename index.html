@@ -1,177 +1,459 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Spanish Conjugation Helper</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
-body{
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-  background: linear-gradient(180deg,#f7f9ff,#eef2ff);
-  margin:0;
-  padding:0;
-  color:#0f172a;
-}
-.container{
-  max-width:900px;
-  margin:60px auto;
-  padding:28px;
-  background: rgba(255,255,255,.55);
-  backdrop-filter: blur(18px);
-  border-radius:22px;
-  box-shadow:0 20px 50px rgba(0,0,0,.08);
-  border:1px solid rgba(15,23,42,.08);
-}
-h1{margin-top:0;font-size:22px}
-p{color:#475569;font-size:14px}
-textarea{
-  width:100%;
-  min-height:90px;
-  padding:14px;
-  font-size:16px;
-  border-radius:14px;
-  border:1px solid rgba(15,23,42,.15);
-  background:rgba(255,255,255,.7);
-}
-button{
-  margin-top:14px;
-  padding:12px 22px;
-  border-radius:14px;
-  border:none;
-  font-size:15px;
-  cursor:pointer;
-  background:linear-gradient(135deg,#6366f1,#3b82f6);
-  color:white;
-}
-.result{
-  margin-top:22px;
-  padding:18px;
-  border-radius:16px;
-  background:rgba(255,255,255,.6);
-  border:1px solid rgba(15,23,42,.1);
-  font-size:22px;
-  font-weight:700;
-}
-.error{color:#b91c1c}
+  body{
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    background: linear-gradient(180deg,#f7f9ff,#eef2ff);
+    margin:0; padding:0; color:#0f172a;
+  }
+  .container{
+    max-width: 980px;
+    margin: 56px auto;
+    padding: 26px;
+    background: rgba(255,255,255,.55);
+    backdrop-filter: blur(18px);
+    border-radius: 22px;
+    border: 1px solid rgba(15,23,42,.08);
+    box-shadow: 0 20px 50px rgba(0,0,0,.08);
+  }
+  h1{margin:0 0 8px 0;font-size:22px}
+  p{margin:0 0 16px 0;color:#475569;font-size:14px;line-height:1.35}
+  textarea{
+    width:100%;
+    min-height:92px;
+    padding:14px;
+    font-size:16px;
+    border-radius:14px;
+    border:1px solid rgba(15,23,42,.15);
+    background:rgba(255,255,255,.72);
+    outline:none;
+  }
+  button{
+    margin-top:14px;
+    padding:12px 22px;
+    border-radius:14px;
+    border:none;
+    font-size:15px;
+    cursor:pointer;
+    background:linear-gradient(135deg,#6366f1,#3b82f6);
+    color:white;
+  }
+  .result{
+    margin-top:18px;
+    padding:16px 18px;
+    border-radius:16px;
+    background:rgba(255,255,255,.6);
+    border:1px solid rgba(15,23,42,.1);
+    font-size:22px;
+    font-weight:750;
+  }
+  .sub{
+    margin-top:10px;
+    font-size:12px;
+    color:#64748b;
+  }
+  .error{color:#b91c1c;font-weight:650}
 </style>
 </head>
-
 <body>
-<div class="container">
-  <h1>Spanish Conjugation Helper</h1>
-  <p>Paste prompts like:<br><strong>present ustedes to know (how to)</strong></p>
+  <div class="container">
+    <h1>Spanish Conjugation Helper</h1>
+    <p>
+      Paste prompts like:<br>
+      <strong>present ustedes to know (how to)</strong><br>
+      <strong>imperfect yo to know (someone)</strong><br>
+      <strong>preterite tú sacar</strong>
+    </p>
 
-  <textarea id="input"></textarea>
-  <button onclick="run()">Get Answer</button>
+    <textarea id="input" placeholder="Paste here..."></textarea>
+    <button id="go">Get Answer</button>
 
-  <div id="output" class="result"></div>
-</div>
+    <div id="output" class="result"></div>
+    <div id="debug" class="sub"></div>
+  </div>
 
 <script>
-/* =====================================================
-   ENGLISH DEFINITION ALIASES (MATCH YOUR DOCUMENT)
-   ===================================================== */
+/* =========================================================
+   NORMALIZATION HELPERS
+   ========================================================= */
+function stripAccents(s){
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+function norm(s){
+  return stripAccents((s||"").toLowerCase()).replace(/\s+/g," ").trim();
+}
 
-const aliases = {
-  "to know (someone)": "to know (someone)",
-  "to know someone": "to know (someone)",
+/* =========================================================
+   SUBJECT PARSING
+   - supports: yo, tu/tú, el/él, ella, nosotros, vosotros, ustedes
+   - supports: "Ana y yo" => nosotros
+   - supports: "Juan y Jorge" => ustedes/ellos (we use "ustedes" slot)
+   - supports: single name like "Sofia" => él/ella slot (we use "él" slot)
+   ========================================================= */
+const SUBJECTS = [
+  {keys:["yo"], person:"yo"},
+  {keys:["tu","tú"], person:"tú"},
+  {keys:["el","él","ella","sofia","pedro","diego","juan","jorge","liliana","luna","olivia"], person:"él"},
+  {keys:["nosotros","nosotras","ana y yo","yo y ana"], person:"nosotros"},
+  {keys:["vosotros","vosotras"], person:"vosotros"},
+  {keys:["ustedes","ellos","ellas","juan y jorge","pedro y diego","liliana y luna"], person:"ustedes"},
+];
+function parseSubject(textN){
+  // special patterns first
+  if (textN.includes("ana y yo") || textN.includes("yo y ana")) return "nosotros";
+  // detect "x y y" (two names) -> plural
+  // If it includes " y " and not "yo", treat as plural
+  if (textN.includes(" y ") && !textN.includes(" yo ")) return "ustedes";
 
-  "to know (how to)": "to know (how to)",
-  "to know how": "to know (how to)",
+  for(const s of SUBJECTS){
+    for(const k of s.keys){
+      if(textN.includes(k)) return s.person;
+    }
+  }
+  return null;
+}
 
-  "to take out": "to take out",
-  "to take": "to take",
+/* =========================================================
+   TENSE PARSING
+   ========================================================= */
+function parseTense(textN){
+  if(textN.includes("preterite")) return "preterite";
+  if(textN.includes("imperfect")) return "imperfect";
+  if(textN.includes("present")) return "present";
+  return null;
+}
 
-  "to get bored": "to become bored",
-  "to become bored": "to become bored",
+/* =========================================================
+   VERB INVENTORY (ALL YOU LISTED)
+   We store:
+     - infinitive
+     - english aliases (as they might appear)
+     - reflexive boolean
+     - irregular forms (only when needed)
+   We DO NOT "guess" English— we add common Conjuguemos-style glosses.
+   Also: user can type the Spanish infinitive directly.
+   ========================================================= */
+const VERBS = [
+  // Reflexive set
+  {inf:"aburrirse", en:["to become bored","to get bored","to become bored"], ref:true},
+  {inf:"asustarse", en:["to get scared","to become scared","to scare oneself"], ref:true},
+  {inf:"cansarse", en:["to get tired","to become tired"], ref:true},
+  {inf:"caerse", en:["to fall","to fall down"], ref:true},
+  {inf:"mojarse", en:["to get wet"], ref:true},
+  {inf:"moverse", en:["to move (oneself)","to move"], ref:true},
+  {inf:"olvidarse", en:["to forget","to forget oneself"], ref:true},
+  {inf:"pararse", en:["to stop","to stand up"], ref:true},
+  {inf:"perderse", en:["to get lost","to get lost; to miss out on","to miss out on"], ref:true},
+  {inf:"preocuparse", en:["to worry"], ref:true},
+  {inf:"prepararse", en:["to get ready","to prepare oneself"], ref:true},
+  {inf:"quedarse", en:["to remain","to stay"], ref:true},
+  {inf:"reirse", en:["to laugh"], ref:true},  // we accept "reirse" normalized; actual is reírse
+  {inf:"romperse", en:["to break (oneself)","to break"], ref:true},
+  {inf:"sentarse", en:["to sit down"], ref:true},
+  {inf:"sentirse", en:["to feel (well/ ill)","to feel"], ref:true},
+  {inf:"subirse", en:["to get in","to go up","to get on"], ref:true},
+  {inf:"verse", en:["to see oneself"], ref:true},
+  {inf:"vestirse", en:["to get dressed","to dress oneself"], ref:true},
+  // Non-reflexive
+  {inf:"andar", en:["to walk","to ride","to go around"]},
+  {inf:"aparecer", en:["to appear"]},
+  {inf:"arreglar", en:["to fix","to repair"]},
+  {inf:"ayudar", en:["to help"]},
+  {inf:"bailar", en:["to dance"]},
+  {inf:"bajar", en:["to lower","to go down","to bring down"]},
+  {inf:"beber", en:["to drink"]},
+  {inf:"buscar", en:["to look for","to search for"]},
+  {inf:"cambiar", en:["to change"]},
+  {inf:"caminar", en:["to walk"]},
+  {inf:"cantar", en:["to sing"]},
+  {inf:"celebrar", en:["to celebrate"]},
+  {inf:"comer", en:["to eat"]},
+  {inf:"compartir", en:["to share"]},
+  {inf:"comprar", en:["to buy","to purchase"]},
+  {inf:"conocer", en:["to know (someone)","to meet","to encounter (meet)"]},
+  {inf:"contar", en:["to count","to tell"]},
+  {inf:"continuar", en:["to continue"]},
+  {inf:"creer", en:["to believe"]},
+  {inf:"dar", en:["to give"]},
+  {inf:"decidir", en:["to decide"]},
+  {inf:"decir", en:["to say","to tell"]},
+  {inf:"decorar", en:["to decorate"]},
+  {inf:"dejar", en:["to leave","to let"]},
+  {inf:"describir", en:["to describe"]},
+  {inf:"disfrutar", en:["to enjoy"]},
+  {inf:"empezar", en:["to begin","to start"]},
+  {inf:"encontrar", en:["to find","to encounter (meet)"]},
+  {inf:"entrar", en:["to enter","to get in"]},
+  {inf:"enviar", en:["to send"]},
+  {inf:"escuchar", en:["to listen (to)"]},
+  {inf:"esperar", en:["to hope","to wait for","to hope/to wait for"]},
+  {inf:"estar", en:["to be (temporary)","to be"]},
+  {inf:"explicar", en:["to explain"]},
+  {inf:"gritar", en:["to shout","to yell"]},
+  {inf:"haber", en:["to have (aux)","to have"]},
+  {inf:"hablar", en:["to speak","to talk"]},
+  {inf:"hacer", en:["to do","to do/to make","to make"]},
+  {inf:"invitar", en:["to invite"]},
+  {inf:"ir", en:["to go"]},
+  {inf:"jugar", en:["to play"]},
+  {inf:"limpiar", en:["to clean"]},
+  {inf:"llegar", en:["to arrive"]},
+  {inf:"llevar", en:["to wear","to bring","to wear/to bring"]},
+  {inf:"mirar", en:["to look at","to watch"]},
+  {inf:"mostrar", en:["to show"]},
+  {inf:"organizar", en:["to organize"]},
+  {inf:"parecer", en:["to seem","to seem, appear to","to appear"]},
+  {inf:"participar", en:["to participate"]},
+  {inf:"pasar", en:["to pass","to spend (time)"]},
+  {inf:"poder", en:["to be able to","can","to be able"]},
+  {inf:"poner", en:["to put","to place"]},
+  {inf:"preguntar", en:["to ask"]},
+  {inf:"preparar", en:["to prepare"]},
+  {inf:"querer", en:["to want","to love"]},
+  {inf:"responder", en:["to respond","to answer"]},
+  {inf:"romper", en:["to break"]},
+  {inf:"saber", en:["to know (how to)","to know (facts)","to know how"]},
+  {inf:"sacar", en:["to take out"]},
+  {inf:"salir", en:["to leave","to go out"]},
+  {inf:"seguir", en:["to follow","to continue"]},
+  {inf:"ser", en:["to be (permanent)","to be"]},
+  {inf:"sonar", en:["to sound"]},
+  {inf:"subir", en:["to go up","to climb","to upload"]},
+  {inf:"tener", en:["to have"]},
+  {inf:"terminar", en:["to finish","to end"]},
+  {inf:"tomar", en:["to take","to drink"]},
+  {inf:"trabajar", en:["to work"]},
+  {inf:"traer", en:["to bring"]},
+  {inf:"venir", en:["to come"]},
+  {inf:"ver", en:["to see"]},
+  {inf:"vivir", en:["to live"]},
+  {inf:"volver", en:["to return","to come back"]},
+];
 
-  "to get angry": "to get angry",
-  "to become angry": "to get angry",
+/* Build lookup maps:
+   - English phrase -> infinitive
+   - Spanish infinitive -> entry
+*/
+const byInf = new Map();
+for(const v of VERBS){
+  byInf.set(norm(v.inf), v);
+}
+const byEnglish = new Map();
+for(const v of VERBS){
+  for(const e of (v.en||[])){
+    byEnglish.set(norm(e), norm(v.inf));
+  }
+}
 
-  "to get wet": "to get wet",
+/* =========================================================
+   CONJUGATION ENGINE
+   - Regular endings
+   - Irregular overrides for listed verbs
+   - Spelling change in preterite yo for -car/-gar/-zar
+   - Reflexive pronouns automatically
+   ========================================================= */
 
-  "to get lost": "to get lost; to miss out on",
-  "to miss out on": "to get lost; to miss out on"
-};
+const pron = {yo:"me", tú:"te", él:"se", nosotros:"nos", vosotros:"os", ustedes:"se"};
 
-/* =====================================================
-   HARD-CODED VERBS
-   ===================================================== */
-
-const verbs = {
-
-  "to know (someone)": {
-    present:{yo:"conozco",tú:"conoces",él:"conoce",nosotros:"conocemos",vosotros:"conocéis",ustedes:"conocen"},
-    preterite:{yo:"conocí",tú:"conociste",él:"conoció",nosotros:"conocimos",vosotros:"conocisteis",ustedes:"conocieron"},
-    imperfect:{yo:"conocía",tú:"conocías",él:"conocía",nosotros:"conocíamos",vosotros:"conocíais",ustedes:"conocían"}
+const regularEndings = {
+  present:{
+    ar:{yo:"o", tú:"as", él:"a", nosotros:"amos", vosotros:"áis", ustedes:"an"},
+    er:{yo:"o", tú:"es", él:"e", nosotros:"emos", vosotros:"éis", ustedes:"en"},
+    ir:{yo:"o", tú:"es", él:"e", nosotros:"imos", vosotros:"ís", ustedes:"en"},
   },
-
-  "to know (how to)": {
-    present:{yo:"sé",tú:"sabes",él:"sabe",nosotros:"sabemos",vosotros:"sabéis",ustedes:"saben"},
-    preterite:{yo:"supe",tú:"supiste",él:"supo",nosotros:"supimos",vosotros:"supisteis",ustedes:"supieron"},
-    imperfect:{yo:"sabía",tú:"sabías",él:"sabía",nosotros:"sabíamos",vosotros:"sabíais",ustedes:"sabían"}
+  imperfect:{
+    ar:{yo:"aba", tú:"abas", él:"aba", nosotros:"ábamos", vosotros:"abais", ustedes:"aban"},
+    er:{yo:"ía", tú:"ías", él:"ía", nosotros:"íamos", vosotros:"íais", ustedes:"ían"},
+    ir:{yo:"ía", tú:"ías", él:"ía", nosotros:"íamos", vosotros:"íais", ustedes:"ían"},
   },
-
-  "to take out": {
-    present:{yo:"saco",tú:"sacas",él:"saca",nosotros:"sacamos",vosotros:"sacáis",ustedes:"sacan"},
-    preterite:{yo:"saqué",tú:"sacaste",él:"sacó",nosotros:"sacamos",vosotros:"sacasteis",ustedes:"sacaron"},
-    imperfect:{yo:"sacaba",tú:"sacabas",él:"sacaba",nosotros:"sacábamos",vosotros:"sacabais",ustedes:"sacaban"}
-  },
-
-  "to become bored": {
-    present:{yo:"me aburro",tú:"te aburres",él:"se aburre",nosotros:"nos aburrimos",vosotros:"os aburrís",ustedes:"se aburren"},
-    preterite:{yo:"me aburrí",tú:"te aburriste",él:"se aburrió",nosotros:"nos aburrimos",vosotros:"os aburristeis",ustedes:"se aburrieron"},
-    imperfect:{yo:"me aburría",tú:"te aburrías",él:"se aburría",nosotros:"nos aburríamos",vosotros:"os aburríais",ustedes:"se aburrían"}
-  },
-
-  "to get angry": {
-    present:{yo:"me enojo",tú:"te enojas",él:"se enoja",nosotros:"nos enojamos",vosotros:"os enojáis",ustedes:"se enojan"},
-    preterite:{yo:"me enojé",tú:"te enojaste",él:"se enojó",nosotros:"nos enojamos",vosotros:"os enojasteis",ustedes:"se enojaron"},
-    imperfect:{yo:"me enojaba",tú:"te enojabas",él:"se enojaba",nosotros:"nos enojábamos",vosotros:"os enojabais",ustedes:"se enojaban"}
-  },
-
-  "to get wet": {
-    present:{yo:"me mojo",tú:"te mojas",él:"se moja",nosotros:"nos mojamos",vosotros:"os mojáis",ustedes:"se mojan"},
-    preterite:{yo:"me mojé",tú:"te mojaste",él:"se mojó",nosotros:"nos mojamos",vosotros:"os mojasteis",ustedes:"se mojaron"},
-    imperfect:{yo:"me mojaba",tú:"te mojabas",él:"se mojaba",nosotros:"nos mojábamos",vosotros:"os mojabais",ustedes:"se mojaban"}
-  },
-
-  "to get lost; to miss out on": {
-    present:{yo:"me pierdo",tú:"te pierdes",él:"se pierde",nosotros:"nos perdemos",vosotros:"os perdéis",ustedes:"se pierden"},
-    preterite:{yo:"me perdí",tú:"te perdiste",él:"se perdió",nosotros:"nos perdimos",vosotros:"os perdisteis",ustedes:"se perdieron"},
-    imperfect:{yo:"me perdía",tú:"te perdías",él:"se perdía",nosotros:"nos perdíamos",vosotros:"os perdíais",ustedes:"se perdían"}
+  preterite:{
+    ar:{yo:"é", tú:"aste", él:"ó", nosotros:"amos", vosotros:"asteis", ustedes:"aron"},
+    er:{yo:"í", tú:"iste", él:"ió", nosotros:"imos", vosotros:"isteis", ustedes:"ieron"},
+    ir:{yo:"í", tú:"iste", él:"ió", nosotros:"imos", vosotros:"isteis", ustedes:"ieron"},
   }
 };
 
-/* =====================================================
-   PARSER
-   ===================================================== */
+const irregular = {
+  // Present irregulars
+  present:{
+    ser:{yo:"soy",tú:"eres",él:"es",nosotros:"somos",vosotros:"sois",ustedes:"son"},
+    ir:{yo:"voy",tú:"vas",él:"va",nosotros:"vamos",vosotros:"vais",ustedes:"van"},
+    estar:{yo:"estoy",tú:"estás",él:"está",nosotros:"estamos",vosotros:"estáis",ustedes:"están"},
+    tener:{yo:"tengo",tú:"tienes",él:"tiene",nosotros:"tenemos",vosotros:"tenéis",ustedes:"tienen"},
+    venir:{yo:"vengo",tú:"vienes",él:"viene",nosotros:"venimos",vosotros:"venís",ustedes:"vienen"},
+    decir:{yo:"digo",tú:"dices",él:"dice",nosotros:"decimos",vosotros:"decís",ustedes:"dicen"},
+    hacer:{yo:"hago",tú:"haces",él:"hace",nosotros:"hacemos",vosotros:"hacéis",ustedes:"hacen"},
+    poner:{yo:"pongo",tú:"pones",él:"pone",nosotros:"ponemos",vosotros:"ponéis",ustedes:"ponen"},
+    salir:{yo:"salgo",tú:"sales",él:"sale",nosotros:"salimos",vosotros:"salís",ustedes:"salen"},
+    traer:{yo:"traigo",tú:"traes",él:"trae",nosotros:"traemos",vosotros:"traéis",ustedes:"traen"},
+    saber:{yo:"sé",tú:"sabes",él:"sabe",nosotros:"sabemos",vosotros:"sabéis",ustedes:"saben"},
+    ver:{yo:"veo",tú:"ves",él:"ve",nosotros:"vemos",vosotros:"veis",ustedes:"ven"},
+    jugar:{yo:"juego",tú:"juegas",él:"juega",nosotros:"jugamos",vosotros:"jugáis",ustedes:"juegan"},
+    poder:{yo:"puedo",tú:"puedes",él:"puede",nosotros:"podemos",vosotros:"podéis",ustedes:"pueden"},
+    querer:{yo:"quiero",tú:"quieres",él:"quiere",nosotros:"queremos",vosotros:"queréis",ustedes:"quieren"},
+    volver:{yo:"vuelvo",tú:"vuelves",él:"vuelve",nosotros:"volvemos",vosotros:"volvéis",ustedes:"vuelven"},
+    seguir:{yo:"sigo",tú:"sigues",él:"sigue",nosotros:"seguimos",vosotros:"seguís",ustedes:"siguen"},
+    empezar:{yo:"empiezo",tú:"empiezas",él:"empieza",nosotros:"empezamos",vosotros:"empezáis",ustedes:"empiezan"},
+    encontrar:{yo:"encuentro",tú:"encuentras",él:"encuentra",nosotros:"encontramos",vosotros:"encontráis",ustedes:"encuentran"},
+    conocer:{yo:"conozco",tú:"conoces",él:"conoce",nosotros:"conocemos",vosotros:"conocéis",ustedes:"conocen"},
+    parecer:{yo:"parezco",tú:"pareces",él:"parece",nosotros:"parecemos",vosotros:"parecéis",ustedes:"parecen"},
+    aparecer:{yo:"aparezco",tú:"apareces",él:"aparece",nosotros:"aparecemos",vosotros:"aparecéis",ustedes:"aparecen"},
+    reir:{yo:"río",tú:"ríes",él:"ríe",nosotros:"reímos",vosotros:"reís",ustedes:"ríen"},
+  },
 
+  // Imperfect irregulars
+  imperfect:{
+    ser:{yo:"era",tú:"eras",él:"era",nosotros:"éramos",vosotros:"erais",ustedes:"eran"},
+    ir:{yo:"iba",tú:"ibas",él:"iba",nosotros:"íbamos",vosotros:"ibais",ustedes:"iban"},
+    ver:{yo:"veía",tú:"veías",él:"veía",nosotros:"veíamos",vosotros:"veíais",ustedes:"veían"},
+  },
+
+  // Preterite irregulars
+  preterite:{
+    ser:{yo:"fui",tú:"fuiste",él:"fue",nosotros:"fuimos",vosotros:"fuisteis",ustedes:"fueron"},
+    ir:{yo:"fui",tú:"fuiste",él:"fue",nosotros:"fuimos",vosotros:"fuisteis",ustedes:"fueron"},
+    ver:{yo:"vi",tú:"viste",él:"vio",nosotros:"vimos",vosotros:"visteis",ustedes:"vieron"},
+    dar:{yo:"di",tú:"diste",él:"dio",nosotros:"dimos",vosotros:"disteis",ustedes:"dieron"},
+    haber:{yo:"hube",tú:"hubiste",él:"hubo",nosotros:"hubimos",vosotros:"hubisteis",ustedes:"hubieron"},
+    estar:{yo:"estuve",tú:"estuviste",él:"estuvo",nosotros:"estuvimos",vosotros:"estuvisteis",ustedes:"estuvieron"},
+    tener:{yo:"tuve",tú:"tuviste",él:"tuvo",nosotros:"tuvimos",vosotros:"tuvisteis",ustedes:"tuvieron"},
+    poder:{yo:"pude",tú:"pudiste",él:"pudo",nosotros:"pudimos",vosotros:"pudisteis",ustedes:"pudieron"},
+    poner:{yo:"puse",tú:"pusiste",él:"puso",nosotros:"pusimos",vosotros:"pusisteis",ustedes:"pusieron"},
+    saber:{yo:"supe",tú:"supiste",él:"supo",nosotros:"supimos",vosotros:"supisteis",ustedes:"supieron"},
+    querer:{yo:"quise",tú:"quisiste",él:"quiso",nosotros:"quisimos",vosotros:"quisisteis",ustedes:"quisieron"},
+    decir:{yo:"dije",tú:"dijiste",él:"dijo",nosotros:"dijimos",vosotros:"dijisteis",ustedes:"dijeron"},
+    hacer:{yo:"hice",tú:"hiciste",él:"hizo",nosotros:"hicimos",vosotros:"hicisteis",ustedes:"hicieron"},
+    venir:{yo:"vine",tú:"viniste",él:"vino",nosotros:"vinimos",vosotros:"vinisteis",ustedes:"vinieron"},
+    traer:{yo:"traje",tú:"trajiste",él:"trajo",nosotros:"trajimos",vosotros:"trajisteis",ustedes:"trajeron"},
+    andar:{yo:"anduve",tú:"anduviste",él:"anduvo",nosotros:"anduvimos",vosotros:"anduvisteis",ustedes:"anduvieron"},
+    tener2:null,
+    reir:{yo:"reí",tú:"reíste",él:"rió",nosotros:"reímos",vosotros:"reísteis",ustedes:"rieron"},
+  }
+};
+
+function verbType(inf){
+  if(inf.endsWith("ar")) return "ar";
+  if(inf.endsWith("er")) return "er";
+  if(inf.endsWith("ir")) return "ir";
+  return null;
+}
+
+function applySpellingChangeYoPret(inf, stem){
+  // only for yo preterite in -car/-gar/-zar
+  // buscar -> busqué, llegar -> llegué, empezar -> empecé handled separately (-zar too)
+  if(inf.endsWith("car")) return stem.slice(0,-1) + "qu"; // c -> qu
+  if(inf.endsWith("gar")) return stem.slice(0,-1) + "gu"; // g -> gu
+  if(inf.endsWith("zar")) return stem.slice(0,-1) + "c";  // z -> c
+  return stem;
+}
+
+function specialPresentStem(inf){
+  // present stem changes we included in irregular.present map for key verbs
+  return null;
+}
+
+function getIrregularKey(infN){
+  // normalize special: reír, reírse -> treat as "reir"
+  if(infN === "reir" || infN === "reirse") return "reir";
+  return infN;
+}
+
+function conjugate(infRaw, tense, person, isReflexive){
+  const infN = norm(infRaw);
+  const key = getIrregularKey(infN);
+
+  // Direct irregular table
+  if(irregular[tense] && irregular[tense][key]){
+    const form = irregular[tense][key][person];
+    return isReflexive ? `${pron[person]} ${form}` : form;
+  }
+
+  // Regular formation
+  const type = verbType(infN);
+  if(!type) return null;
+  let stem = infN.slice(0, -2);
+
+  // preterite yo spelling change
+  if(tense === "preterite" && person === "yo"){
+    stem = applySpellingChangeYoPret(infN, stem);
+  }
+
+  // Also handle -zar preterite: empezar is irregular present, regular preterite but with z->c? (empezar ends with zar)
+  // Our spelling-change function covers it.
+
+  const ending = regularEndings[tense][type][person];
+  if(!ending) return null;
+  const form = stem + ending;
+  return isReflexive ? `${pron[person]} ${form}` : form;
+}
+
+/* =========================================================
+   FIND VERB IN INPUT
+   - Prefer English definition match
+   - Else accept Spanish infinitive in input
+   ========================================================= */
+function findVerbFromInput(textN){
+  // try longest English alias match first
+  const englishKeys = Array.from(byEnglish.keys()).sort((a,b)=>b.length-a.length);
+  for(const k of englishKeys){
+    if(textN.includes(k)) return byEnglish.get(k);
+  }
+  // try Spanish infinitive present in text
+  const infKeys = Array.from(byInf.keys()).sort((a,b)=>b.length-a.length);
+  for(const inf of infKeys){
+    if(textN.includes(inf)) return inf;
+  }
+  return null;
+}
+
+/* =========================================================
+   RUN
+   ========================================================= */
 function run(){
-  const text = document.getElementById("input").value.toLowerCase();
+  const raw = document.getElementById("input").value;
+  const textN = norm(raw);
   const out = document.getElementById("output");
+  const dbg = document.getElementById("debug");
 
-  const tense =
-    text.includes("preterite") ? "preterite" :
-    text.includes("imperfect") ? "imperfect" :
-    text.includes("present") ? "present" : null;
+  const tense = parseTense(textN);
+  const person = parseSubject(textN);
+  const infN = findVerbFromInput(textN);
 
-  const subject =
-    ["yo","tú","él","ella","nosotros","vosotros","ustedes"]
-      .find(s => text.includes(s));
-
-  const aliasKey = Object.keys(aliases).find(a => text.includes(a));
-  const verbKey = aliasKey ? aliases[aliasKey] : null;
-
-  if(!tense || !subject || !verbKey || !verbs[verbKey]){
+  if(!tense || !person || !infN){
     out.innerHTML = `<span class="error">Could not parse input.</span>`;
+    dbg.textContent = `Detected: tense=${tense||"?"}, subject=${person||"?"}, verb=${infN||"?"}`;
     return;
   }
 
-  const subj = subject === "ella" ? "él" : subject;
-  out.textContent = verbs[verbKey][tense][subj];
+  const v = byInf.get(infN);
+  const isRef = !!(v && v.ref);
+
+  // For correct accent in some infinitives: map normalized -> actual display form (not required for output)
+  // Conjugation already includes accents for irregular forms we set (sé, estás, etc.)
+
+  const result = conjugate(infN, tense, person, isRef);
+
+  if(!result){
+    out.innerHTML = `<span class="error">No form available.</span>`;
+    dbg.textContent = `Detected: tense=${tense}, subject=${person}, verb=${infN} (reflexive=${isRef})`;
+    return;
+  }
+
+  out.textContent = result;
+  dbg.textContent = `Detected: tense=${tense}, subject=${person}, verb=${infN}${isRef ? " (reflexive)" : ""}`;
 }
+
+document.getElementById("go").addEventListener("click", run);
+document.getElementById("input").addEventListener("keydown", (e)=>{
+  if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){
+    e.preventDefault();
+    run();
+  }
+});
 </script>
 </body>
 </html>
